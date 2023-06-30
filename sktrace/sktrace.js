@@ -210,9 +210,86 @@ function watcherLib(libname, callback) {
         }, "pointer", ["pointer", "int"]));
     }
 }
+//refs:https://awakened1712.github.io/hacking/hacking-frida/
+function waitForLoadLibrary(libName,callback){
+    Java.perform(function () {
+        const System = Java.use('java.lang.System');
+        const Runtime = Java.use('java.lang.Runtime');
+        const VMStack = Java.use('dalvik.system.VMStack');
 
+        console.log("Process.platform:", Process.platform);
 
+        // @ts-ignore
+        System.loadLibrary.implementation = function (library) {
+            try {
+                console.log('System.loadLibrary("' + library + '")');
+                Runtime.getRuntime().loadLibrary0(VMStack.getCallingClassLoader(), library);
+                if (("lib"+library+".so") !== libName) return;
+                console.log("find so:", library);
+                callback();
+            } catch (ex) {
+                console.log(ex);
+            }
+        };
 
+        // @ts-ignore
+        System.load.implementation = function (library) {
+            try {
+                console.log('System.load("' + library + '")');
+                Runtime.getRuntime().nativeLoad(library, VMStack.getCallingClassLoader());
+            } catch (ex) {
+                console.log(ex);
+            }
+        };
+    });
+
+}
+//refs:https://github.com/lasting-yang/frida_dump/blob/3a6f78d4b6f0cfac96708f665ea25032527cb067/dump_dex.js#L117C1-L117C1
+function waitForLoadLibraryNative(libName,callback){
+    Interceptor.attach(Module.findExportByName(null, "dlopen"), {
+        onEnter: function(args) {
+            var pathptr = args[0];
+            if (pathptr !== undefined && pathptr != null) {
+                var path = ptr(pathptr).readCString();
+                console.log("dlopen:", path);
+                if (path.indexOf(libName) >= 0) {
+                    this.findedLib = true;
+                    console.log("[dlopen:]", path);
+                }
+            }
+        },
+        onLeave: function(retval) {
+            if (this.findedLib) {
+               if(callback){
+                   callback();
+                   callback=null;
+               }
+            }
+        }
+    })
+
+    Interceptor.attach(Module.findExportByName(null, "android_dlopen_ext"), {
+        onEnter: function(args) {
+            var pathptr = args[0];
+            if (pathptr !== undefined && pathptr != null) {
+                var path = ptr(pathptr).readCString();
+                console.log("android_dlopen_ext:", path);
+                if (path.indexOf(libName) >= 0) {
+                    this.findedLib = true;
+                    console.log("[android_dlopen_ext:]", path);
+                }
+            }
+        },
+        onLeave: function(retval) {
+            if (this.findedLib) {
+                if(callback){
+                    callback();
+                    callback=null;
+                }
+            }
+        }
+    });
+}
 (() => {
 
     console.log(`----- start trace -----`);
@@ -222,10 +299,7 @@ function watcherLib(libname, callback) {
         console.log(JSON.stringify(payload))
         const libname = payload.libname;
         console.log(`libname:${libname}`)
-        if(payload.spawn) {
-            console.error(`todo: spawn inject not implemented`)
-        } else {
-            // const modules = Process.enumerateModules();
+        function startTrace(){
             const targetModule = Process.getModuleByName(libname);
             let targetAddress = null;
             if("symbol" in payload) {
@@ -234,6 +308,11 @@ function watcherLib(libname, callback) {
                 targetAddress = targetModule.base.add(ptr(payload.offset));
             }
             traceAddr(targetAddress)
+        }
+        if(payload.spawn) {
+            waitForLoadLibraryNative(libname,startTrace)
+        } else {
+            startTrace();
         }
     })
 })()

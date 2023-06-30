@@ -84,7 +84,7 @@ def main():
     
     device = frida.get_usb_device(1)
     if args.inject_method == "spawn":
-        raise Exception("working for this ...")
+#         raise Exception("working for this ...")
         pid = device.spawn([args.target])
         config["payload"]["spawn"] = True
     else:
@@ -129,7 +129,6 @@ def main():
 
 if __name__ == '__main__':
     main()
-
 
 
 
