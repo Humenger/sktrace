@@ -115,12 +115,14 @@ function stalkerTraceRangeC(tid, base, size) {
 
 
 function stalkerTraceRange(tid, base, size) {
+    const modMap=new ModuleMap();
     Stalker.follow(tid, {
         transform: (iterator) => {
             const instruction = iterator.next();
             const startAddress = instruction.address;
             const isModuleCode = startAddress.compare(base) >= 0 && 
                 startAddress.compare(base.add(size)) < 0;
+            const module=modMap.find(startAddress);
             // const isModuleCode = true;
             do {
                 iterator.keep();
@@ -129,6 +131,8 @@ function stalkerTraceRange(tid, base, size) {
                         type: 'inst',
                         tid: tid,
                         block: startAddress,
+                        module: module.name,
+                        offset: startAddress.sub(module.base),
                         val: JSON.stringify(instruction)
                     })
                     iterator.putCallout((context) => {

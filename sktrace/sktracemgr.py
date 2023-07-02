@@ -21,12 +21,14 @@ class Block:
 
 
 class Inst:
-    def __init__(self, addr, block, size, mnem, op):
+    def __init__(self, addr, block, size, mnem, op,module,offset):
         self.addr = addr
         self.block = block
         self.size = size
         self.mnem = mnem
         self.op = op
+        self.module=module
+        self.offset=offset
         self.execed_ctxs = []
         self.changed_regs_dict = {}
         self.try_strings_set = set()
@@ -103,7 +105,7 @@ class Inst:
             print(change_line)
     
     def simple_str(self):
-        inst_line = "{}\t{}\t{}".format(self.addr, self.mnem, self.op)
+        inst_line = "{}\t{: <15}{: <8}{: <25}".format(self.module+"!"+self.offset,self.addr, self.mnem, self.op)
         return inst_line
 
     def __str__(self):
@@ -188,7 +190,9 @@ class Arm64TraceLog:
         if type == 'inst':
             # print(payload)
             val = json.loads(payload['val'])
-            inst = Inst(val["address"], payload["block"], val["size"], val["mnemonic"], val["opStr"])
+            inst = Inst(val["address"],
+                        payload["block"], val["size"],
+                        val["mnemonic"], val["opStr"],payload["module"],payload["offset"])
             if inst.block not in self.block_dict:
                 self.block_dict[inst.block] = Block(inst.block)
             self.block_dict[inst.block].append_inst(inst)
